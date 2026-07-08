@@ -3,6 +3,8 @@ import logo from './logo.svg';
 import './App.css';
 import { fetchSkins } from './api/apiSkins';
 import type { CSSkin } from './api/skins';
+import { useAuth } from './auth/useAuth';
+import { LoginScreen } from './auth/LoginScreen';
 
 type TabKey = 'all' | 'weapons' | 'gloves' | 'knives';
 
@@ -35,14 +37,19 @@ function PhotoCard({ skin }: { skin: CSSkin }) {
 }
 
 function App() {
+  const { user, loading: authLoading, login, logout } = useAuth();
   const [skins, setSkins] = useState<CSSkin[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [skinsLoading, setSkinsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [selectedRarity, setSelectedRarity] = useState('all');
   const [weaponFilter, setWeaponFilter] = useState('all');
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     let isMounted = true;
 
     fetchSkins()
@@ -58,14 +65,14 @@ function App() {
       })
       .finally(() => {
         if (isMounted) {
-          setLoading(false);
+          setSkinsLoading(false);
         }
       });
 
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [user]);
 
   const rarityOptions = useMemo(() => {
     return Array.from(new Set(skins.map((skin) => skin.rarity?.name || 'Unknown'))).sort(
@@ -198,6 +205,19 @@ function App() {
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [visibleSkins]);
 
+  // All hooks have run by this point — safe to branch on auth state now.
+  if (authLoading) {
+    return (
+      <div className="app-shell">
+        <p className="status">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen onSuccess={login} />;
+  }
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -205,6 +225,11 @@ function App() {
           <p className="eyebrow">CS:GO Skin Album</p>
           <h1>Browse skins by rarity</h1>
           <p>Explore every item and sort them from common to rare.</p>
+        </div>
+        <div className="user-info">
+          <img src={user.picture || logo} alt={user.name} className="user-avatar" />
+          <span>{user.name}</span>
+          <button type="button" onClick={logout}>Log out</button>
         </div>
       </header>
 
@@ -253,10 +278,10 @@ function App() {
         </div>
       </section>
 
-      {loading && <p className="status">Loading skins...</p>}
+      {skinsLoading && <p className="status">Loading skins...</p>}
       {error && <p className="status error">{error}</p>}
 
-      {!loading && !error && (
+      {!skinsLoading && !error && (
         <>
           {activeTab === 'all' && (
             <div className="gallery">

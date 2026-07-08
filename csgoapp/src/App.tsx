@@ -5,8 +5,9 @@ import { fetchSkins } from './api/apiSkins';
 import type { CSSkin } from './api/skins';
 import { useAuth } from './auth/useAuth';
 import { LoginScreen } from './auth/LoginScreen';
+import { getFavorites, addFavorite, removeFavorite } from './api/favorites';
 
-type TabKey = 'all' | 'weapons' | 'gloves' | 'knives';
+type TabKey = 'all' | 'weapons' | 'gloves' | 'knives' | 'favorites';
 
 const rarityOrder: Record<string, number> = {
   'Consumer Grade': 0,
@@ -23,9 +24,25 @@ function getRarityRank(name?: string): number {
   return rarityOrder[name || 'Unknown'] ?? 99;
 }
 
-function PhotoCard({ skin }: { skin: CSSkin }) {
+function PhotoCard({
+  skin,
+  isFavorite,
+  onToggleFavorite,
+}: {
+  skin: CSSkin;
+  isFavorite: boolean;
+  onToggleFavorite: (skin: CSSkin) => void;
+}) {
   return (
     <article className="skin-card">
+      <button
+        type="button"
+        className="favorite-button"
+        onClick={() => onToggleFavorite(skin)}
+        aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+      >
+        {isFavorite ? '❤️' : '🤍'}
+      </button>
       <img src={skin.image || logo} alt={skin.name} className="skin-image" />
       <div className="skin-info">
         <h3>{skin.name}</h3>
@@ -73,6 +90,31 @@ function App() {
       isMounted = false;
     };
   }, [user]);
+
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!user) return;
+    getFavorites(user.email).then((favs) => {
+      setFavoriteIds(new Set(favs.map((f: any) => f.skin_id)));
+    });
+  }, [user]);
+
+  const toggleFavorite = async (skin: CSSkin) => {
+    if (!user) return;
+    const isFav = favoriteIds.has(skin.id);
+    if (isFav) {
+      await removeFavorite(user.email, skin.id);
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        next.delete(skin.id);
+        return next;
+      });
+    } else {
+      await addFavorite(user.email, skin.id, skin.name, skin.image);
+      setFavoriteIds((prev) => new Set(prev).add(skin.id));
+    }
+  };
 
   const rarityOptions = useMemo(() => {
     return Array.from(new Set(skins.map((skin) => skin.rarity?.name || 'Unknown'))).sort(
@@ -169,6 +211,10 @@ function App() {
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [visibleSkins, weaponFilter]);
 
+  const favoriteSkins = useMemo(() => {
+    return visibleSkins.filter((skin) => favoriteIds.has(skin.id));
+  }, [visibleSkins, favoriteIds]);
+
   const gloves = useMemo(() => {
     const groups = new Map<string, CSSkin[]>();
 
@@ -247,6 +293,9 @@ function App() {
           <button type="button" className={activeTab === 'knives' ? 'tab active' : 'tab'} onClick={() => setActiveTab('knives')}>
             Knives
           </button>
+          <button type="button" className={activeTab === 'favorites' ? 'tab active' : 'tab'} onClick={() => setActiveTab('favorites')}>
+            Favorites
+          </button>
         </div>
 
         <div className="filter-group">
@@ -293,7 +342,7 @@ function App() {
                   </div>
                   <div className="card-grid">
                     {items.map((skin) => (
-                      <PhotoCard key={skin.id} skin={skin} />
+                      <PhotoCard key={skin.id} skin={skin} isFavorite={favoriteIds.has(skin.id)} onToggleFavorite={toggleFavorite}/>
                     ))}
                   </div>
                 </section>
@@ -311,7 +360,7 @@ function App() {
                   </div>
                   <div className="card-grid">
                     {weaponSkins.map((skin) => (
-                      <PhotoCard key={skin.id} skin={skin} />
+                      <PhotoCard key={skin.id} skin={skin} isFavorite={favoriteIds.has(skin.id)} onToggleFavorite={toggleFavorite}/>
                     ))}
                   </div>
                 </section>
@@ -329,7 +378,7 @@ function App() {
                   </div>
                   <div className="card-grid">
                     {gloveSkins.map((skin) => (
-                      <PhotoCard key={skin.id} skin={skin} />
+                      <PhotoCard key={skin.id} skin={skin} isFavorite={favoriteIds.has(skin.id)} onToggleFavorite={toggleFavorite}/>
                     ))}
                   </div>
                 </section>
@@ -347,11 +396,36 @@ function App() {
                   </div>
                   <div className="card-grid">
                     {knifeSkins.map((skin) => (
-                      <PhotoCard key={skin.id} skin={skin} />
+                      <PhotoCard key={skin.id} skin={skin} isFavorite={favoriteIds.has(skin.id)} onToggleFavorite={toggleFavorite}/>
                     ))}
                   </div>
                 </section>
               ))}
+            </div>
+          )}
+
+          {activeTab === 'favorites' && (
+            <div className="gallery">
+              {favoriteSkins.length === 0 ? (
+                <p className="status">You have no favorites yet.</p>
+              ) : (
+                groupedByRarity
+                  .map(([rarity, items]) => [rarity, items.filter((skin) => favoriteIds.has(skin.id))] as [string, CSSkin[]])
+                  .filter(([, items]) => items.length > 0)
+                  .map(([rarity, items]) => (
+                    <section key={rarity} className="rarity-section">
+                      <div className="rarity-heading">
+                        <h2>{rarity}</h2>
+                        <span>{items.length} skins</span>
+                      </div>
+                      <div className="card-grid">
+                        {items.map((skin) => (
+                          <PhotoCard key={skin.id} skin={skin} isFavorite={favoriteIds.has(skin.id)} onToggleFavorite={toggleFavorite} />
+                        ))}
+                      </div>
+                    </section>
+                  ))
+              )}
             </div>
           )}
         </>

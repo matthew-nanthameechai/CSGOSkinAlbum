@@ -28,22 +28,28 @@ function PhotoCard({
   skin,
   isFavorite,
   onToggleFavorite,
+  showFavoriteButton,
 }: {
   skin: CSSkin;
   isFavorite: boolean;
   onToggleFavorite: (skin: CSSkin) => void;
+  showFavoriteButton: boolean;
 }) {
   return (
     <article className="skin-card">
-      <button
-        type="button"
-        className="favorite-button"
-        onClick={() => onToggleFavorite(skin)}
-        aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-      >
-        {isFavorite ? '❤️' : '🤍'}
-      </button>
-      <img src={skin.image || logo} alt={skin.name} className="skin-image" />
+      <div className="image-wrapper">
+        <img src={skin.image || logo} alt={skin.name} className="skin-image" />
+        {showFavoriteButton && (
+          <button
+            type="button"
+            className="favorite-button"
+            onClick={() => onToggleFavorite(skin)}
+            aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            {isFavorite ? '❤️' : '🤍'}
+          </button>
+        )}
+      </div>
       <div className="skin-info">
         <h3>{skin.name}</h3>
         <p>{skin.weapon?.name || 'Unknown weapon'}</p>
@@ -61,12 +67,10 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [selectedRarity, setSelectedRarity] = useState('all');
   const [weaponFilter, setWeaponFilter] = useState('all');
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
+  // Skins load for everyone, logged in or not.
   useEffect(() => {
-    if (!user) {
-      return;
-    }
-
     let isMounted = true;
 
     fetchSkins()
@@ -89,16 +93,25 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [user]);
+  }, []);
 
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
-
+  // Favorites only load once a user is logged in.
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setFavoriteIds(new Set());
+      return;
+    }
     getFavorites(user.email).then((favs) => {
       setFavoriteIds(new Set(favs.map((f: any) => f.skin_id)));
     });
   }, [user]);
+
+  // If someone logs out while sitting on the Favorites tab, bounce them back.
+  useEffect(() => {
+    if (!user && activeTab === 'favorites') {
+      setActiveTab('all');
+    }
+  }, [user, activeTab]);
 
   const toggleFavorite = async (skin: CSSkin) => {
     if (!user) return;
@@ -212,8 +225,26 @@ function App() {
   }, [visibleSkins, weaponFilter]);
 
   const favoriteSkins = useMemo(() => {
-    return visibleSkins.filter((skin) => favoriteIds.has(skin.id));
-  }, [visibleSkins, favoriteIds]);
+    return skins.filter((skin) => favoriteIds.has(skin.id));
+  }, [skins, favoriteIds]);
+
+  const groupedFavorites = useMemo(() => {
+    return [...favoriteSkins]
+      .sort((a, b) => {
+        const rarityDiff = getRarityRank(a.rarity?.name) - getRarityRank(b.rarity?.name);
+        return rarityDiff !== 0 ? rarityDiff : a.name.localeCompare(b.name);
+      })
+      .reduce((groups, skin) => {
+        const key = skin.rarity?.name || 'Unknown';
+        const existing = groups.find(([r]) => r === key);
+        if (existing) {
+          existing[1].push(skin);
+        } else {
+          groups.push([key, [skin]]);
+        }
+        return groups;
+      }, [] as [string, CSSkin[]][]);
+  }, [favoriteSkins]);
 
   const gloves = useMemo(() => {
     const groups = new Map<string, CSSkin[]>();
@@ -251,17 +282,12 @@ function App() {
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [visibleSkins]);
 
-  // All hooks have run by this point — safe to branch on auth state now.
   if (authLoading) {
     return (
       <div className="app-shell">
         <p className="status">Loading...</p>
       </div>
     );
-  }
-
-  if (!user) {
-    return <LoginScreen onSuccess={login} />;
   }
 
   return (
@@ -272,11 +298,17 @@ function App() {
           <h1>Browse skins by rarity</h1>
           <p>Explore every item and sort them from common to rare.</p>
         </div>
-        <div className="user-info">
-          <img src={user.picture || logo} alt={user.name} className="user-avatar" />
-          <span>{user.name}</span>
-          <button type="button" onClick={logout}>Log out</button>
-        </div>
+        {user ? (
+          <div className="user-info">
+            <img src={user.picture || logo} alt={user.name} className="user-avatar" />
+            <span>{user.name}</span>
+            <button type="button" onClick={logout}>Log out</button>
+          </div>
+        ) : (
+          <div className="user-info">
+            <LoginScreen onSuccess={login} />
+          </div>
+        )}
       </header>
 
       <section className="controls">
@@ -293,9 +325,11 @@ function App() {
           <button type="button" className={activeTab === 'knives' ? 'tab active' : 'tab'} onClick={() => setActiveTab('knives')}>
             Knives
           </button>
-          <button type="button" className={activeTab === 'favorites' ? 'tab active' : 'tab'} onClick={() => setActiveTab('favorites')}>
-            Favorites
-          </button>
+          {user && (
+            <button type="button" className={activeTab === 'favorites' ? 'tab active' : 'tab'} onClick={() => setActiveTab('favorites')}>
+              Favorites
+            </button>
+          )}
         </div>
 
         <div className="filter-group">
@@ -342,7 +376,13 @@ function App() {
                   </div>
                   <div className="card-grid">
                     {items.map((skin) => (
-                      <PhotoCard key={skin.id} skin={skin} isFavorite={favoriteIds.has(skin.id)} onToggleFavorite={toggleFavorite}/>
+                      <PhotoCard
+                        key={skin.id}
+                        skin={skin}
+                        isFavorite={favoriteIds.has(skin.id)}
+                        onToggleFavorite={toggleFavorite}
+                        showFavoriteButton={!!user}
+                      />
                     ))}
                   </div>
                 </section>
@@ -360,7 +400,13 @@ function App() {
                   </div>
                   <div className="card-grid">
                     {weaponSkins.map((skin) => (
-                      <PhotoCard key={skin.id} skin={skin} isFavorite={favoriteIds.has(skin.id)} onToggleFavorite={toggleFavorite}/>
+                      <PhotoCard
+                        key={skin.id}
+                        skin={skin}
+                        isFavorite={favoriteIds.has(skin.id)}
+                        onToggleFavorite={toggleFavorite}
+                        showFavoriteButton={!!user}
+                      />
                     ))}
                   </div>
                 </section>
@@ -378,7 +424,13 @@ function App() {
                   </div>
                   <div className="card-grid">
                     {gloveSkins.map((skin) => (
-                      <PhotoCard key={skin.id} skin={skin} isFavorite={favoriteIds.has(skin.id)} onToggleFavorite={toggleFavorite}/>
+                      <PhotoCard
+                        key={skin.id}
+                        skin={skin}
+                        isFavorite={favoriteIds.has(skin.id)}
+                        onToggleFavorite={toggleFavorite}
+                        showFavoriteButton={!!user}
+                      />
                     ))}
                   </div>
                 </section>
@@ -396,7 +448,13 @@ function App() {
                   </div>
                   <div className="card-grid">
                     {knifeSkins.map((skin) => (
-                      <PhotoCard key={skin.id} skin={skin} isFavorite={favoriteIds.has(skin.id)} onToggleFavorite={toggleFavorite}/>
+                      <PhotoCard
+                        key={skin.id}
+                        skin={skin}
+                        isFavorite={favoriteIds.has(skin.id)}
+                        onToggleFavorite={toggleFavorite}
+                        showFavoriteButton={!!user}
+                      />
                     ))}
                   </div>
                 </section>
@@ -404,27 +462,30 @@ function App() {
             </div>
           )}
 
-          {activeTab === 'favorites' && (
+          {activeTab === 'favorites' && user && (
             <div className="gallery">
               {favoriteSkins.length === 0 ? (
                 <p className="status">You have no favorites yet.</p>
               ) : (
-                groupedByRarity
-                  .map(([rarity, items]) => [rarity, items.filter((skin) => favoriteIds.has(skin.id))] as [string, CSSkin[]])
-                  .filter(([, items]) => items.length > 0)
-                  .map(([rarity, items]) => (
-                    <section key={rarity} className="rarity-section">
-                      <div className="rarity-heading">
-                        <h2>{rarity}</h2>
-                        <span>{items.length} skins</span>
-                      </div>
-                      <div className="card-grid">
-                        {items.map((skin) => (
-                          <PhotoCard key={skin.id} skin={skin} isFavorite={favoriteIds.has(skin.id)} onToggleFavorite={toggleFavorite} />
-                        ))}
-                      </div>
-                    </section>
-                  ))
+                groupedFavorites.map(([rarity, items]) => (
+                  <section key={rarity} className="rarity-section">
+                    <div className="rarity-heading">
+                      <h2>{rarity}</h2>
+                      <span>{items.length} skins</span>
+                    </div>
+                    <div className="card-grid">
+                      {items.map((skin) => (
+                        <PhotoCard
+                          key={skin.id}
+                          skin={skin}
+                          isFavorite={favoriteIds.has(skin.id)}
+                          onToggleFavorite={toggleFavorite}
+                          showFavoriteButton={!!user}
+                        />
+                      ))}
+                    </div>
+                  </section>
+                ))
               )}
             </div>
           )}

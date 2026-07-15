@@ -67,6 +67,8 @@ function App() {
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [selectedRarity, setSelectedRarity] = useState('all');
   const [weaponFilter, setWeaponFilter] = useState('all');
+  const [gloveFilter, setGloveFilter] = useState('all');
+  const [knifeFilter, setKnifeFilter] = useState('all');
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
 
   // Skins load for everyone, logged in or not.
@@ -246,13 +248,48 @@ function App() {
       }, [] as [string, CSSkin[]][]);
   }, [favoriteSkins]);
 
+  const gloveOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        visibleSkins
+          .map((skin) => skin.weapon?.name || '')
+          .filter((name) => {
+            const lower = name.toLowerCase();
+            return lower.includes('glove') || lower.includes('wrap');
+          }),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+  }, [visibleSkins]);
+
+  const knifeOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        visibleSkins
+          .map((skin) => skin.weapon?.name || '')
+          .filter((name) => {
+            const lower = name.toLowerCase();
+            return (
+              lower.includes('knife') ||
+              ['bayonet', 'karambit', 'dagger', 'butterfly', 'falchion', 'gut'].some((term) =>
+                lower.includes(term),
+              )
+            );
+          }),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+  }, [visibleSkins]);
+
   const gloves = useMemo(() => {
     const groups = new Map<string, CSSkin[]>();
 
     visibleSkins.forEach((skin) => {
       const weaponName = skin.weapon?.name || 'Unknown glove';
       const weaponNameLower = weaponName.toLowerCase();
-      if (!weaponNameLower.includes('glove')) {
+      if (!weaponNameLower.includes('glove') && !weaponNameLower.includes('wrap')) {
+        return;
+      }
+
+      if (gloveFilter !== 'all' && !weaponNameLower.includes(gloveFilter.toLowerCase())) {
         return;
       }
 
@@ -262,7 +299,7 @@ function App() {
     });
 
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [visibleSkins]);
+  }, [gloveFilter, visibleSkins]);
 
   const knives = useMemo(() => {
     const groups = new Map<string, CSSkin[]>();
@@ -270,7 +307,17 @@ function App() {
     visibleSkins.forEach((skin) => {
       const weaponName = skin.weapon?.name || 'Unknown knife';
       const weaponNameLower = weaponName.toLowerCase();
-      if (!weaponNameLower.includes('knife')) {
+      const isKnifeType =
+        weaponNameLower.includes('knife') ||
+        ['bayonet', 'karambit', 'dagger', 'butterfly', 'falchion', 'gut'].some((term) =>
+          weaponNameLower.includes(term),
+        );
+
+      if (!isKnifeType) {
+        return;
+      }
+
+      if (knifeFilter !== 'all' && !weaponNameLower.includes(knifeFilter.toLowerCase())) {
         return;
       }
 
@@ -280,7 +327,7 @@ function App() {
     });
 
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [visibleSkins]);
+  }, [knifeFilter, visibleSkins]);
 
   if (authLoading) {
     return (
@@ -353,6 +400,34 @@ function App() {
                 {weaponOptions.map((weapon) => (
                   <option key={weapon} value={weapon}>
                     {weapon}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {activeTab === 'gloves' && (
+            <label className="filter">
+              <span>Filter by gloves</span>
+              <select value={gloveFilter} onChange={(event) => setGloveFilter(event.target.value)}>
+                <option value="all">All gloves</option>
+                {gloveOptions.map((glove) => (
+                  <option key={glove} value={glove}>
+                    {glove}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {activeTab === 'knives' && (
+            <label className="filter">
+              <span>Filter by knives</span>
+              <select value={knifeFilter} onChange={(event) => setKnifeFilter(event.target.value)}>
+                <option value="all">All knives</option>
+                {knifeOptions.map((knife) => (
+                  <option key={knife} value={knife}>
+                    {knife}
                   </option>
                 ))}
               </select>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import App from './App';
 import { fetchSkins } from './api/apiSkins';
 
@@ -8,6 +9,13 @@ jest.mock('./api/apiSkins', () => ({
 }));
 
 const mockedFetchSkins = fetchSkins as jest.MockedFunction<typeof fetchSkins>;
+
+const renderApp = () =>
+  render(
+    <GoogleOAuthProvider clientId="test-client-id">
+      <App />
+    </GoogleOAuthProvider>,
+  );
 
 describe('App browsing experience', () => {
   beforeEach(() => {
@@ -76,7 +84,7 @@ describe('App browsing experience', () => {
   });
 
   it('shows the browse controls and a skin card', async () => {
-    render(<App />);
+    renderApp();
 
     expect(await screen.findByText(/Browse skins by rarity/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /all items/i })).toBeInTheDocument();
@@ -85,7 +93,7 @@ describe('App browsing experience', () => {
   });
 
   it('shows type filters for gloves and knives tabs', async () => {
-    render(<App />);
+    renderApp();
 
     fireEvent.click(screen.getByRole('button', { name: /gloves/i }));
     expect(await screen.findByLabelText(/filter by gloves/i)).toBeInTheDocument();

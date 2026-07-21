@@ -1,18 +1,18 @@
-# Getting Started with Create React App
+# CS:GO Skin Album frontend
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This app provides the React interface for browsing skins, filtering by rarity, and managing favorites.
 
-## Available Scripts
+## Scripts
 
-In the project directory, you can run:
+- `npm start` – start the development server
+- `npm test` – run the test suite
+- `npm run build` – create a production build
 
-### `npm start`
+## Development notes
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+- Tests are written with React Testing Library and Jest.
+- Playwright is available for browser-based checks under the [tests](tests) folder.
+- The app expects the backend API to be available before browsing skins.
 
 ### `npm test`
 

@@ -42,6 +42,13 @@ test.describe('Public browsing (logged out)', () => {
     await expect(page.getByRole('button', { name: 'Knives' })).toHaveClass(/active/);
   });
 
+  test('can switch to all items tab', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'all items' }).click();
+    await expect(page.getByRole('button', { name: 'All Items' })).toHaveClass(/active/);
+  });
+  
+
   test('can filter by rarity', async ({ page }) => {
     await page.goto('/');
 
